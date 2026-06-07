@@ -1,0 +1,25 @@
+{
+  "name": "COSMOS",
+  "short_name": "COSMOS",
+  "description": "COSMOS — AI Hand Gesture Controller. Control your device with hand movements.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020818",
+  "theme_color": "#020818",
+  "orientation": "landscape-primary",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon.svg",     "sizes": "any",     "type": "image/svg+xml" }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Start Gesture Control",
+      "short_name": "Start",
+      "description": "Launch COSMOS hand gesture control",
+      "url": "/?shortcut=start"
+    }
+  ]
+}

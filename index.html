@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="theme-color" content="#020818"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="COSMOS"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="icon" type="image/svg+xml" href="icon.svg"/>
+  <title>COSMOS</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.min.js" crossorigin="anonymous"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --bg:#020818;--surface:#0a1628;--card:#0d1f3c;
+      --border:rgba(99,179,237,0.15);--glow:rgba(99,179,237,0.45);
+      --accent:#63b3ed;--accent2:#9f7aea;
+      --green:#48bb78;--red:#fc8181;--amber:#f6ad55;
+      --text:#cbd5e0;--dim:#718096;
+    }
+    html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;user-select:none;}
+
+    /* Stars */
+    #stars{position:fixed;inset:0;z-index:0;pointer-events:none;}
+
+    /* Layout */
+    #app{position:relative;z-index:1;display:flex;flex-direction:column;width:100%;height:100%;}
+
+    /* Header */
+    .hdr{display:flex;align-items:center;gap:12px;padding:10px 16px;background:rgba(8,18,36,0.97);border-bottom:1px solid var(--border);flex-shrink:0;}
+    .hdr-logo{width:34px;height:34px;border-radius:50%;border:1.5px solid rgba(99,179,237,0.4);display:flex;align-items:center;justify-content:center;font-size:18px;animation:spin 12s linear infinite;flex-shrink:0;}
+    @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    .hdr-title{font-size:16px;font-weight:700;letter-spacing:3px;background:linear-gradient(90deg,#63b3ed,#9f7aea);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .hdr-sub{font-size:11px;color:var(--dim);}
+    .hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+    .badge{padding:4px 10px;border-radius:6px;border:1px solid var(--border);font-size:11px;color:var(--dim);font-family:monospace;cursor:default;}
+    .badge.alt{color:var(--accent);border-color:rgba(99,179,237,0.3);}
+    .status-pill{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;color:var(--dim);}
+    .sdot{width:7px;height:7px;border-radius:50%;background:var(--dim);}
+    .sdot.on{background:var(--green);animation:pulse 1.5s infinite;}
+    .sdot.warn{background:var(--amber);}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+    /* Main content */
+    .content{flex:1;display:flex;overflow:hidden;}
+
+    /* Camera panel */
+    .cam-panel{flex:1;min-width:0;display:flex;flex-direction:column;padding:12px;gap:10px;overflow:hidden;}
+    .cam-wrap{position:relative;flex:1;background:#000;border-radius:14px;border:1px solid var(--border);overflow:hidden;}
+    #input-video{display:none;}
+    #output-canvas{width:100%;height:100%;object-fit:cover;display:none;}
+    .cam-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--dim);}
+    .cam-empty-icon{font-size:52px;opacity:0.25;}
+    .cam-empty-title{font-size:15px;color:var(--text);}
+    .cam-empty-sub{font-size:12px;opacity:0.6;text-align:center;max-width:280px;line-height:1.5;}
+    #gesture-toast{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);border:1px solid rgba(99,179,237,0.3);border-radius:10px;padding:8px 18px;font-size:15px;color:white;display:none;white-space:nowrap;z-index:10;backdrop-filter:blur(8px);}
+    #gesture-toast.show{display:block;}
+    /* Countdown ring for dwell click */
+    #dwell-ring{position:fixed;pointer-events:none;z-index:9997;display:none;transform:translate(-50%,-50%);}
+
+    /* Virtual cursor */
+    #vcursor{position:fixed;width:22px;height:22px;border-radius:50%;border:2px solid var(--accent);background:rgba(99,179,237,0.15);pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:width 0.1s,height 0.1s,background 0.1s;display:none;}
+    #vcursor.click-anim{width:14px;height:14px;background:rgba(99,179,237,0.5);}
+
+    /* Controls bar */
+    .ctrl-bar{display:flex;gap:8px;flex-shrink:0;}
+    .ctrl-btn{flex:1;padding:10px 8px;border-radius:10px;background:rgba(99,179,237,0.06);border:1px solid var(--border);color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s;letter-spacing:0.3px;}
+    .ctrl-btn:hover{background:rgba(99,179,237,0.12);border-color:var(--glow);}
+    .ctrl-btn.active{background:rgba(72,187,120,0.1);border-color:rgba(72,187,120,0.4);color:var(--green);}
+    .ctrl-btn.hf-active{background:rgba(159,122,234,0.1);border-color:rgba(159,122,234,0.4);color:var(--accent2);}
+    .ctrl-btn.kb-active{background:rgba(246,173,85,0.1);border-color:rgba(246,173,85,0.3);color:var(--amber);}
+
+    /* Right panel */
+    .r-panel{width:272px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;padding:12px 12px 12px 0;overflow-y:auto;}
+    .r-panel::-webkit-scrollbar{width:4px;}
+    .r-panel::-webkit-scrollbar-thumb{background:rgba(99,179,237,0.15);border-radius:4px;}
+
+    .pcard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;}
+    .pcard-title{font-size:10px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;}
+
+    /* Current gesture big display */
+    .gesture-big{text-align:center;padding:8px 0;}
+    #g-emoji{font-size:44px;display:block;margin-bottom:6px;}
+    #g-name{font-size:14px;font-weight:700;color:var(--text);}
+    #g-action{font-size:12px;color:var(--dim);margin-top:3px;}
+
+    /* Finger bars */
+    .fgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+    .fcol{display:flex;flex-direction:column;align-items:center;gap:4px;}
+    .fbg{width:16px;height:56px;background:rgba(99,179,237,0.06);border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex;align-items:flex-end;}
+    .fbar{width:100%;height:10%;background:var(--accent);border-radius:8px;transition:height 0.1s,background 0.1s;}
+    .fbar.up{height:100%;background:var(--green);}
+    .flbl{font-size:9px;color:var(--dim);text-align:center;}
+
+    /* Gesture list */
+    .grow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);}
+    .grow:last-child{border-bottom:none;padding-bottom:0;}
+    .gemoji{font-size:17px;width:26px;text-align:center;}
+    .ginfo{flex:1;min-width:0;}
+    .gname{font-size:12px;color:var(--text);font-weight:600;}
+    .gdesc{font-size:11px;color:var(--dim);}
+    .gdot{width:7px;height:7px;border-radius:50%;background:var(--border);flex-shrink:0;}
+    .gdot.on{background:var(--green);box-shadow:0 0 6px var(--green);}
+
+    /* Log */
+    #loglist{max-height:115px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;}
+    #loglist::-webkit-scrollbar{width:3px;}
+    #loglist::-webkit-scrollbar-thumb{background:rgba(99,179,237,0.15);}
+    .lentry{display:flex;gap:6px;align-items:flex-start;font-size:11px;padding:3px 0;border-bottom:1px solid rgba(99,179,237,0.04);}
+    .lentry:last-child{border-bottom:none;}
+    .ltime{color:var(--dim);font-family:monospace;flex-shrink:0;font-size:10px;margin-top:1px;}
+    .lmsg{color:var(--text);line-height:1.4;}
+
+    /* Virtual Keyboard */
+    #vkb{position:fixed;bottom:0;left:0;right:0;background:rgba(8,18,36,0.98);border-top:1px solid var(--border);padding:10px 12px 14px;z-index:100;backdrop-filter:blur(12px);display:none;}
+    #vkb.show{display:block;}
+    #vkb-out{background:rgba(13,31,60,0.9);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;color:var(--text);min-height:36px;margin-bottom:8px;font-family:monospace;word-break:break-all;}
+    .kbrows{display:flex;flex-direction:column;gap:4px;}
+    .kbrow{display:flex;gap:3px;justify-content:center;}
+    .kkey{min-width:30px;height:32px;padding:0 5px;background:rgba(13,31,60,0.9);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;position:relative;overflow:hidden;flex-shrink:0;}
+    .kkey:hover{background:rgba(99,179,237,0.1);}
+    .kkey.hovered{background:rgba(99,179,237,0.15);border-color:var(--accent);color:var(--accent);}
+    .kkey.pressed{background:rgba(99,179,237,0.3);transform:scale(0.93);}
+    .kkey.wide{min-width:50px;}
+    .kkey.xwide{min-width:160px;}
+    .dwell-fill{position:absolute;bottom:0;left:0;height:3px;width:0%;background:var(--accent);border-radius:0 0 3px 3px;}
+
+    /* Settings overlay */
+    #settings{position:fixed;inset:0;background:rgba(2,8,24,0.9);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);}
+    #settings.show{display:flex;}
+    .scard{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:400px;}
+    .stitle{font-size:15px;font-weight:700;letter-spacing:2px;color:var(--accent);margin-bottom:16px;}
+    .srow{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+    .srow:last-of-type{border-bottom:none;}
+    .slabel{font-size:13px;color:var(--text);}
+    .ssub{font-size:11px;color:var(--dim);margin-top:2px;}
+    .toggle{width:40px;height:22px;background:rgba(99,179,237,0.15);border-radius:11px;cursor:pointer;position:relative;transition:background 0.2s;border:1px solid var(--border);}
+    .toggle.on{background:rgba(72,187,120,0.4);border-color:rgba(72,187,120,0.4);}
+    .toggle::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:white;transition:left 0.2s;}
+    .toggle.on::after{left:21px;}
+
+    /* Notifications */
+    #notifs{position:fixed;top:58px;right:14px;z-index:300;display:flex;flex-direction:column;gap:6px;pointer-events:none;}
+    .notif{padding:8px 14px;background:rgba(10,22,40,0.97);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);animation:slideIn 0.2s ease;max-width:280px;}
+    @keyframes slideIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+
+    /* Install banner */
+    #ibanner{position:fixed;bottom:0;left:0;right:0;background:rgba(13,31,60,0.98);border-top:1px solid var(--border);padding:11px 16px;display:flex;align-items:center;gap:12px;z-index:400;backdrop-filter:blur(8px);}
+    #ibanner.hidden{display:none;}
+    .install-text{flex:1;font-size:13px;color:var(--text);}
+    .ibtn{padding:6px 14px;background:rgba(99,179,237,0.1);border:1px solid var(--glow);border-radius:8px;color:var(--accent);font-size:13px;cursor:pointer;transition:all 0.2s;}
+    .ibtn:hover{background:rgba(99,179,237,0.2);}
+    .idismiss{background:none;border:none;color:var(--dim);cursor:pointer;font-size:18px;padding:4px;line-height:1;}
+
+    @media(max-width:700px){.r-panel{display:none;}}
+  </style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+
+<div id="app">
+  <!-- HEADER -->
+  <div class="hdr">
+    <div class="hdr-logo">🌌</div>
+    <div>
+      <div class="hdr-title">COSMOS HAND</div>
+      <div class="hdr-sub">AI Gesture Controller</div>
+    </div>
+    <div class="hdr-right">
+      <span class="badge alt">Alt + F = Hands Free</span>
+      <div class="status-pill">
+        <div class="sdot" id="sdot"></div>
+        <span id="stext">Ready</span>
+      </div>
+      <button onclick="document.getElementById('settings').classList.add('show')" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--dim);padding:6px 10px;cursor:pointer;font-size:12px;transition:all 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--dim)'">⚙ Settings</button>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+    <!-- CAMERA PANEL -->
+    <div class="cam-panel">
+      <div class="cam-wrap" id="camwrap">
+        <video id="input-video" autoplay playsinline muted></video>
+        <canvas id="output-canvas"></canvas>
+        <div class="cam-empty" id="cam-empty">
+          <div class="cam-empty-icon">🖐</div>
+          <div class="cam-empty-title">COSMOS Hand Controller</div>
+          <div class="cam-empty-sub">Click <strong style="color:var(--accent)">Start Camera</strong> to begin.<br/>Press <strong style="color:var(--accent2)">Alt + F</strong> anytime to toggle hands-free mode.</div>
+        </div>
+        <div id="gesture-toast"></div>
+      </div>
+      <div class="ctrl-bar">
+        <button class="ctrl-btn" id="cam-btn" onclick="toggleCamera()">▶ Start Camera</button>
+        <button class="ctrl-btn" id="hf-btn" onclick="toggleHandsFree()">🖐 Hands Free</button>
+        <button class="ctrl-btn" id="kb-btn" onclick="toggleKeyboard()">⌨ Keyboard</button>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="r-panel">
+      <!-- Current gesture -->
+      <div class="pcard">
+        <div class="pcard-title">Current Gesture</div>
+        <div class="gesture-big">
+          <span id="g-emoji">🤚</span>
+          <div id="g-name">No hand detected</div>
+          <div id="g-action">Show your hand to the camera</div>
+        </div>
+      </div>
+
+      <!-- Finger bars -->
+      <div class="pcard">
+        <div class="pcard-title">Finger Detection</div>
+        <div class="fgrid">
+          <div class="fcol"><div class="fbg"><div class="fbar" id="fb0"></div></div><div class="flbl">Thumb</div></div>
+          <div class="fcol"><div class="fbg"><div class="fbar" id="fb1"></div></div><div class="flbl">Index</div></div>
+          <div class="fcol"><div class="fbg"><div class="fbar" id="fb2"></div></div><div class="flbl">Middle</div></div>
+          <div class="fcol"><div class="fbg"><div class="fbar" id="fb3"></div></div><div class="flbl">Ring</div></div>
+          <div class="fcol"><div class="fbg"><div class="fbar" id="fb4"></div></div><div class="flbl">Pinky</div></div>
+        </div>
+      </div>
+
+      <!-- Gesture commands -->
+      <div class="pcard">
+        <div class="pcard-title">Gesture Commands</div>
+        <div class="grow"><span class="gemoji">✋</span><div class="ginfo"><div class="gname">Open Hand</div><div class="gdesc">Pause / Play media</div></div><div class="gdot" id="gd0"></div></div>
+        <div class="grow"><span class="gemoji">✊</span><div class="ginfo"><div class="gname">Closed Fist</div><div class="gdesc">Stop media</div></div><div class="gdot" id="gd1"></div></div>
+        <div class="grow"><span class="gemoji">☝️</span><div class="ginfo"><div class="gname">Point Up</div><div class="gdesc">Move cursor / Click</div></div><div class="gdot" id="gd2"></div></div>
+        <div class="grow"><span class="gemoji">✌️</span><div class="ginfo"><div class="gname">Peace Sign</div><div class="gdesc">Scroll up / down</div></div><div class="gdot" id="gd3"></div></div>
+        <div class="grow"><span class="gemoji">👍</span><div class="ginfo"><div class="gname">Thumbs Up</div><div class="gdesc">Confirm / OK</div></div><div class="gdot" id="gd4"></div></div>
+        <div class="grow"><span class="gemoji">🤏</span><div class="ginfo"><div class="gname">Pinch</div><div class="gdesc">Toggle typing mode</div></div><div class="gdot" id="gd5"></div></div>
+      </div>
+
+      <!-- Log -->
+      <div class="pcard">
+        <div class="pcard-title">Activity Log</div>
+        <div id="loglist"><div class="lentry" style="color:var(--dim);">Waiting for gestures...</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Virtual cursor -->
+<div id="vcursor"></div>
+
+<!-- Virtual keyboard -->
+<div id="vkb">
+  <div id="vkb-out">Type with gestures or click keys below...</div>
+  <div class="kbrows">
+    <div class="kbrow">
+      <div class="kkey" data-k="1">1</div><div class="kkey" data-k="2">2</div><div class="kkey" data-k="3">3</div><div class="kkey" data-k="4">4</div><div class="kkey" data-k="5">5</div><div class="kkey" data-k="6">6</div><div class="kkey" data-k="7">7</div><div class="kkey" data-k="8">8</div><div class="kkey" data-k="9">9</div><div class="kkey" data-k="0">0</div>
+    </div>
+    <div class="kbrow">
+      <div class="kkey" data-k="Q">Q</div><div class="kkey" data-k="W">W</div><div class="kkey" data-k="E">E</div><div class="kkey" data-k="R">R</div><div class="kkey" data-k="T">T</div><div class="kkey" data-k="Y">Y</div><div class="kkey" data-k="U">U</div><div class="kkey" data-k="I">I</div><div class="kkey" data-k="O">O</div><div class="kkey" data-k="P">P</div>
+    </div>
+    <div class="kbrow">
+      <div class="kkey" data-k="A">A</div><div class="kkey" data-k="S">S</div><div class="kkey" data-k="D">D</div><div class="kkey" data-k="F">F</div><div class="kkey" data-k="G">G</div><div class="kkey" data-k="H">H</div><div class="kkey" data-k="J">J</div><div class="kkey" data-k="K">K</div><div class="kkey" data-k="L">L</div>
+    </div>
+    <div class="kbrow">
+      <div class="kkey" data-k="Z">Z</div><div class="kkey" data-k="X">X</div><div class="kkey" data-k="C">C</div><div class="kkey" data-k="V">V</div><div class="kkey" data-k="B">B</div><div class="kkey" data-k="N">N</div><div class="kkey" data-k="M">M</div><div class="kkey wide" data-k="BACK">⌫ Del</div>
+    </div>
+    <div class="kbrow">
+      <div class="kkey wide" data-k=",">,</div>
+      <div class="kkey xwide" data-k="SPACE">SPACE</div>
+      <div class="kkey wide" data-k=".">.</div>
+      <div class="kkey wide" data-k="CLEAR" style="color:var(--red);border-color:rgba(252,129,129,0.3);">Clear</div>
+    </div>
+  </div>
+</div>
+
+<!-- Notifications -->
+<div id="notifs"></div>
+
+<!-- Settings -->
+<div id="settings">
+  <div class="scard">
+    <div class="stitle">⚙ SETTINGS</div>
+    <div class="srow">
+      <div><div class="slabel">Mirror Camera</div><div class="ssub">Flip for natural interaction</div></div>
+      <div class="toggle on" id="t-mirror" onclick="toggleSetting('mirror')"></div>
+    </div>
+    <div class="srow">
+      <div><div class="slabel">Show Skeleton</div><div class="ssub">Draw hand landmarks on camera</div></div>
+      <div class="toggle on" id="t-skeleton" onclick="toggleSetting('skeleton')"></div>
+    </div>
+    <div class="srow">
+      <div><div class="slabel">Dwell Click</div><div class="ssub">Hold cursor to auto-click (0.8s)</div></div>
+      <div class="toggle on" id="t-dwell" onclick="toggleSetting('dwell')"></div>
+    </div>
+    <div class="srow">
+      <div><div class="slabel">Gesture Sensitivity</div><div class="ssub">Higher = more responsive</div></div>
+      <input type="range" min="1" max="10" value="5" id="sens-slider" style="width:80px;" oninput="CFG.sensitivity=parseInt(this.value)"/>
+    </div>
+    <div class="srow" style="border:none;">
+      <div><div class="slabel">Dwell Time</div><div class="ssub">Time to hold for click/type (ms)</div></div>
+      <select id="dwell-time-sel" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-size:12px;" onchange="CFG.dwellTime=parseInt(this.value)">
+        <option value="600">600ms</option>
+        <option value="800" selected>800ms</option>
+        <option value="1000">1000ms</option>
+        <option value="1200">1200ms</option>
+      </select>
+    </div>
+    <button onclick="document.getElementById('settings').classList.remove('show')" style="width:100%;margin-top:16px;padding:10px;border-radius:10px;background:rgba(99,179,237,0.08);border:1px solid var(--glow);color:var(--accent);cursor:pointer;font-size:14px;transition:all 0.2s;">Close Settings</button>
+  </div>
+</div>
+
+<!-- Install banner -->
+<div id="ibanner" class="hidden">
+  <div class="install-text">📱 Install COSMOS Hand as an app — works offline on any device!</div>
+  <button class="ibtn" id="install-btn">Install</button>
+  <button class="idismiss" onclick="document.getElementById('ibanner').classList.add('hidden')">✕</button>
+</div>
+
+<script>
+// STARFIELD
+(()=>{
+  const c=document.getElementById('stars'),cx=c.getContext('2d');let s=[];
+  const rs=()=>{c.width=window.innerWidth;c.height=window.innerHeight;};
+  const ri=()=>{s=Array.from({length:130},()=>({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.1+0.2,o:Math.random()*0.5+0.1,sp:Math.random()*0.2+0.03,t:Math.random()*Math.PI*2}));};
+  const draw=()=>{cx.clearRect(0,0,c.width,c.height);s.forEach(p=>{p.t+=0.015;p.y-=p.sp;if(p.y<0){p.y=c.height;p.x=Math.random()*c.width;}cx.beginPath();cx.arc(p.x,p.y,p.r,0,Math.PI*2);cx.fillStyle=`rgba(226,232,240,${p.o*(0.5+0.5*Math.sin(p.t))})`;cx.fill();});requestAnimationFrame(draw);};
+  rs();ri();draw();window.addEventListener('resize',()=>{rs();ri();});
+})();
+
+// CONFIG
+const CFG={mirror:true,skeleton:true,dwell:true,sensitivity:5,dwellTime:800};
+
+// STATE
+let camOn=false,hfMode=false,kbMode=false;
+let handsInst=null,camInst=null;
+let lastGesture=null,gestureConfirmTimer=null;
+let sx=window.innerWidth/2,sy=window.innerHeight/2; // smooth cursor
+let prevPeaceY=null;
+let hoveredKey=null,keyDwellStart=0,keyDwellTimer=null;
+let dwellStart=0,dwellPos={x:0,y:0};
+
+// UTILS
+const $ = id => document.getElementById(id);
+function now(){const d=new Date();return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`;}
+
+function notify(msg,dur=2800){
+  const el=document.createElement('div');el.className='notif';el.textContent=msg;
+  $('notifs').appendChild(el);
+  setTimeout(()=>el.style.opacity='0',dur-300);
+  setTimeout(()=>el.remove(),dur);
+}
+
+function setStatus(t,type=''){
+  $('stext').textContent=t;
+  $('sdot').className='sdot'+(type?' '+type:'');
+}
+
+function addLog(msg){
+  const el=$('loglist');
+  if(el.children.length===1&&el.children[0].style.color)el.innerHTML='';
+  const e=document.createElement('div');e.className='lentry';
+  e.innerHTML=`<span class="ltime">${now()}</span><span class="lmsg">${msg}</span>`;
+  el.insertBefore(e,el.firstChild);
+  while(el.children.length>12)el.removeChild(el.lastChild);
+}
+
+let toastT;
+function toast(t){
+  const el=$('gesture-toast');el.textContent=t;el.classList.add('show');
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),1600);
+}
+
+// GESTURE DISPLAY
+const GINFO={
+  open:{emoji:'✋',name:'Open Hand',action:'Pause / Play media'},
+  fist:{emoji:'✊',name:'Closed Fist',action:'Stop media'},
+  point:{emoji:'☝️',name:'Pointing Up',action:'Move cursor / Click'},
+  peace:{emoji:'✌️',name:'Peace Sign',action:'Scroll up or down'},
+  thumb:{emoji:'👍',name:'Thumbs Up',action:'Confirm / Enter'},
+  pinch:{emoji:'🤏',name:'Pinch',action:'Toggle typing mode'},
+  none:{emoji:'🤚',name:'No hand detected',action:'Show your hand to the camera'}
+};
+function setGestureDisplay(g){
+  const info=GINFO[g]||GINFO.none;
+  $('g-emoji').textContent=info.emoji;
+  $('g-name').textContent=info.name;
+  $('g-action').textContent=info.action;
+  [0,1,2,3,4,5].forEach(i=>document.getElementById('gd'+i).className='gdot');
+  const idx={open:0,fist:1,point:2,peace:3,thumb:4,pinch:5};
+  if(idx[g]!==undefined)document.getElementById('gd'+idx[g]).className='gdot on';
+}
+
+function setFingers(up){
+  up.forEach((v,i)=>{
+    const b=$('fb'+i);if(!b)return;
+    b.style.height=v?'100%':'10%';
+    b.className='fbar'+(v?' up':'');
+  });
+}
+
+// DETECT GESTURE
+function detect(lm){
+  // Mirror-aware detection
+  const mx=CFG.mirror?(l=>({x:1-l.x,y:l.y,z:l.z})):(l=>l);
+  const m=lm.map(mx);
+
+  const thumbUp =m[4].x > m[3].x; // thumb abducted
+  const indexUp =m[8].y < m[6].y;
+  const middleUp=m[12].y < m[10].y;
+  const ringUp  =m[16].y < m[14].y;
+  const pinkyUp =m[20].y < m[18].y;
+
+  setFingers([thumbUp,indexUp,middleUp,ringUp,pinkyUp]);
+
+  // Pinch: thumb and index tips close together
+  const pd=Math.hypot(m[4].x-m[8].x,m[4].y-m[8].y);
+  if(pd<0.055&&!middleUp&&!ringUp&&!pinkyUp)return 'pinch';
+
+  const up=[thumbUp,indexUp,middleUp,ringUp,pinkyUp];
+  const cnt=up.filter(Boolean).length;
+
+  if(cnt>=4&&indexUp&&middleUp&&ringUp&&pinkyUp)return 'open';
+  if(cnt===0)return 'fist';
+  if(indexUp&&!middleUp&&!ringUp&&!pinkyUp)return 'point';
+  if(indexUp&&middleUp&&!ringUp&&!pinkyUp&&!thumbUp)return 'peace';
+  if(thumbUp&&!indexUp&&!middleUp&&!ringUp&&!pinkyUp)return 'thumb';
+  return null;
+}
+
+// ACTIONS
+function doAction(g,lm){
+  switch(g){
+    case 'open':
+      {const v=document.querySelector('video:not(#input-video),audio');
+      if(v){v.paused?v.play():v.pause();}
+      toast('✋ Pause / Play');addLog('✋ Open hand → Pause/Play');}
+      break;
+    case 'fist':
+      {const v=document.querySelector('video:not(#input-video),audio');
+      if(v){v.pause();if(v.currentTime!==undefined)v.currentTime=0;}
+      toast('✊ Stop');addLog('✊ Fist → Stop');}
+      break;
+    case 'point':
+      if(hfMode)moveCursor(lm);
+      toast('☝️ Pointing — cursor active');
+      break;
+    case 'peace':
+      doScroll(lm);
+      toast('✌️ Scrolling');
+      break;
+    case 'thumb':
+      {const f=document.activeElement;
+      if(f&&f!==document.body)f.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+      notify('👍 Confirmed!');addLog('👍 Thumbs up → Confirm');}
+      break;
+    case 'pinch':
+      kbMode=!kbMode;toggleKeyboard(kbMode);
+      toast(kbMode?'🤏 Typing mode ON':'🤏 Typing mode OFF');
+      addLog('🤏 Pinch → Typing mode '+(kbMode?'ON':'OFF'));
+      break;
+  }
+  setGestureDisplay(g);
+}
+
+// CURSOR MOVEMENT
+function moveCursor(lm){
+  // Use index finger tip (landmark 8)
+  const tip=CFG.mirror?{x:1-lm[8].x,y:lm[8].y}:lm[8];
+  const tx=tip.x*window.innerWidth;
+  const ty=tip.y*window.innerHeight;
+  // Smooth interpolation
+  const alpha=0.35;
+  sx+=(tx-sx)*alpha;
+  sy+=(ty-sy)*alpha;
+
+  const cur=$('vcursor');
+  cur.style.left=sx+'px';
+  cur.style.top=sy+'px';
+  cur.style.display='block';
+
+  // Dwell click
+  if(CFG.dwell){
+    const dist=Math.hypot(tx-dwellPos.x,ty-dwellPos.y);
+    if(dist<28){
+      if(!dwellStart)dwellStart=Date.now();
+      const prog=Math.min((Date.now()-dwellStart)/CFG.dwellTime,1);
+      cur.style.boxShadow=`0 0 0 ${Math.round(prog*14)}px rgba(99,179,237,${(0.35*prog).toFixed(2)})`;
+      if(prog>=1){simulateClick(sx,sy);dwellStart=0;dwellPos={x:tx,y:ty};}
+    }else{
+      dwellStart=0;dwellPos={x:tx,y:ty};
+      cur.style.boxShadow='';
+    }
+  }
+
+  // Keyboard hover
+  if(kbMode)trackKbHover(sx,sy);
+}
+
+function simulateClick(x,y){
+  const cur=$('vcursor');
+  cur.classList.add('click-anim');
+  setTimeout(()=>cur.classList.remove('click-anim'),180);
+  cur.style.display='none';
+  const el=document.elementFromPoint(x,y);
+  cur.style.display='block';
+  if(el&&el.id!=='vcursor'){
+    el.click();
+    addLog(`☝️ Click: ${el.tagName.toLowerCase()}${el.id?'#'+el.id:el.className?' .'+el.className.split(' ')[0]:''}`);
+  }
+}
+
+// SCROLL
+let lastPeaceY=null;
+function doScroll(lm){
+  const midY=lm[12].y;
+  if(lastPeaceY!==null){
+    const delta=(midY-lastPeaceY)*window.innerHeight*4;
+    window.scrollBy(0,delta);
+    if(Math.abs(delta)>4)addLog(`✌️ Scroll ${delta>0?'↓ down':'↑ up'}`);
+  }
+  lastPeaceY=midY;
+  setTimeout(()=>{lastPeaceY=null;},300);
+}
+
+// KEYBOARD HOVER DWELL
+function trackKbHover(x,y){
+  let found=null;
+  document.querySelectorAll('.kkey').forEach(k=>{
+    const r=k.getBoundingClientRect();
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)found=k;
+  });
+  if(found!==hoveredKey){
+    if(hoveredKey){
+      hoveredKey.classList.remove('hovered');
+      const bar=hoveredKey.querySelector('.dwell-fill');
+      if(bar)bar.style.width='0%';
+    }
+    hoveredKey=found;
+    keyDwellStart=found?Date.now():0;
+    if(hoveredKey)hoveredKey.classList.add('hovered');
+  }
+  if(hoveredKey&&keyDwellStart){
+    const prog=Math.min((Date.now()-keyDwellStart)/CFG.dwellTime,1);
+    let bar=hoveredKey.querySelector('.dwell-fill');
+    if(!bar){bar=document.createElement('div');bar.className='dwell-fill';hoveredKey.appendChild(bar);}
+    bar.style.width=(prog*100)+'%';
+    if(prog>=1){
+      typeKey(hoveredKey.dataset.k);
+      hoveredKey.classList.add('pressed');
+      setTimeout(()=>hoveredKey&&hoveredKey.classList.remove('pressed'),140);
+      keyDwellStart=Date.now()+300; // delay before repeat
+    }
+  }
+}
+
+function typeKey(k){
+  const out=$('vkb-out');
+  const cur=out.textContent==='Type with gestures or click keys below...'?'':out.textContent;
+  if(k==='BACK')out.textContent=cur.slice(0,-1)||'';
+  else if(k==='SPACE')out.textContent=cur+' ';
+  else if(k==='CLEAR')out.textContent='';
+  else out.textContent=cur+k;
+  addLog(`⌨ Typed: ${k==='SPACE'?'[space]':k==='BACK'?'[backspace]':k==='CLEAR'?'[clear]':k}`);
+}
+
+// CAMERA
+async function toggleCamera(){
+  if(camOn){stopCamera();return;}
+  const btn=$('cam-btn');
+  btn.textContent='⏳ Starting...';btn.disabled=true;
+  try{
+    if(!window.Hands)throw new Error('MediaPipe not loaded. Check internet connection.');
+    handsInst=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`});
+    handsInst.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:0.65,minTrackingConfidence:0.5});
+    handsInst.onResults(onResults);
+    const vid=$('input-video');
+    camInst=new Camera(vid,{onFrame:async()=>{if(handsInst)await handsInst.send({image:vid});},width:640,height:480});
+    await camInst.start();
+    $('cam-empty').style.display='none';
+    $('output-canvas').style.display='block';
+    camOn=true;btn.className='ctrl-btn active';btn.textContent='⏹ Stop Camera';btn.disabled=false;
+    setStatus('Camera active',  'on');
+    addLog('📷 Camera started successfully');
+    notify('Camera started! Show your hand to begin.');
+  }catch(e){
+    btn.className='ctrl-btn';btn.textContent='▶ Start Camera';btn.disabled=false;
+    if(e.name==='NotAllowedError')notify('⚠️ Camera permission denied. Please allow camera access.');
+    else notify('⚠️ Error: '+e.message);
+    setStatus('Error');
+  }
+}
+
+function stopCamera(){
+  if(camInst){camInst.stop();camInst=null;}
+  if(handsInst){handsInst.close();handsInst=null;}
+  camOn=false;
+  $('cam-empty').style.display='flex';
+  $('output-canvas').style.display='none';
+  $('vcursor').style.display='none';
+  const btn=$('cam-btn');btn.className='ctrl-btn';btn.textContent='▶ Start Camera';
+  setStatus('Ready');
+  setGestureDisplay('none');
+  setFingers([false,false,false,false,false]);
+  addLog('📷 Camera stopped');
+}
+
+// HANDS FREE MODE
+function toggleHandsFree(force){
+  hfMode=force!==undefined?force:!hfMode;
+  const btn=$('hf-btn');
+  btn.className='ctrl-btn'+(hfMode?' hf-active':'');
+  btn.textContent=hfMode?'🖐 Hands Free ON':'🖐 Hands Free';
+  if(!hfMode)$('vcursor').style.display='none';
+  notify(hfMode?'🖐 Hands-Free ON — move index finger to control cursor':'🖐 Hands-Free mode OFF');
+  addLog('🖐 Hands-free '+(hfMode?'enabled':'disabled'));
+}
+
+// KEYBOARD
+function toggleKeyboard(force){
+  kbMode=force!==undefined?force:!kbMode;
+  $('vkb').classList.toggle('show',kbMode);
+  const btn=$('kb-btn');
+  btn.className='ctrl-btn'+(kbMode?' kb-active':'');
+  btn.textContent=kbMode?'⌨ Keyboard ON':'⌨ Keyboard';
+}
+
+// MEDIAPIPE RESULTS
+let holdTimer=null;
+function onResults(res){
+  const canvas=$('output-canvas'),vid=$('input-video');
+  const ctx=canvas.getContext('2d');
+  canvas.width=vid.videoWidth||640;
+  canvas.height=vid.videoHeight||480;
+  ctx.save();
+  if(CFG.mirror){ctx.translate(canvas.width,0);ctx.scale(-1,1);}
+  ctx.drawImage(res.image,0,0);
+  ctx.restore();
+
+  if(res.multiHandLandmarks&&res.multiHandLandmarks.length>0){
+    const lm=res.multiHandLandmarks[0];
+    // Draw skeleton
+    if(CFG.skeleton){
+      const drawnLm=lm.map(l=>CFG.mirror?{x:1-l.x,y:l.y,z:l.z}:l);
+      drawConnectors(ctx,drawnLm,HAND_CONNECTIONS,{color:'#1D9E75',lineWidth:2});
+      drawLandmarks(ctx,drawnLm,{color:'#63b3ed',lineWidth:1,radius:3});
+    }
+    const g=detect(lm);
+    // Continuous tracking for point & peace
+    if(g==='point'&&hfMode)moveCursor(lm);
+    if(g==='peace')doScroll(lm);
+    // Gesture confirmation with hold
+    if(g&&g!==lastGesture){
+      clearTimeout(holdTimer);lastGesture=g;
+      setGestureDisplay(g);
+      holdTimer=setTimeout(()=>doAction(g,lm),350);
+    }else if(!g){
+      clearTimeout(holdTimer);lastGesture=null;
+      setGestureDisplay('none');
+      setFingers([false,false,false,false,false]);
+      if(hfMode)$('vcursor').style.display='none';
+    }
+  }else{
+    clearTimeout(holdTimer);lastGesture=null;
+    setGestureDisplay('none');setFingers([false,false,false,false,false]);
+    if(hfMode)$('vcursor').style.display='none';
+  }
+}
+
+// SETTINGS
+function toggleSetting(k){
+  CFG[k]=!CFG[k];
+  $('t-'+k).classList.toggle('on',CFG[k]);
+  if(k==='mirror'){const c=$('output-canvas');c.style.transform=CFG.mirror?'scaleX(-1)':'';}
+}
+
+// KEYBOARD SHORTCUT: Alt+F
+document.addEventListener('keydown',e=>{
+  if(e.altKey&&e.key.toLowerCase()==='f'){
+    e.preventDefault();
+    if(!camOn){toggleCamera().then(()=>{setTimeout(()=>{if(camOn)toggleHandsFree(true);},1500);});}
+    else toggleHandsFree();
+  }
+  if(e.key==='Escape'){
+    $('settings').classList.remove('show');
+    if(kbMode){kbMode=false;toggleKeyboard(false);}
+  }
+});
+
+// KB KEY CLICKS
+document.querySelectorAll('.kkey').forEach(k=>k.addEventListener('click',()=>typeKey(k.dataset.k)));
+
+// PWA SERVICE WORKER
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js')
+    .then(r=>console.log('SW registered',r.scope))
+    .catch(e=>console.log('SW skipped',e));
+}
+
+// PWA INSTALL
+let deferredInstall;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();deferredInstall=e;
+  $('ibanner').classList.remove('hidden');
+});
+$('install-btn').addEventListener('click',async()=>{
+  if(!deferredInstall)return;
+  deferredInstall.prompt();
+  const{outcome}=await deferredInstall.userChoice;
+  if(outcome==='accepted')notify('✅ COSMOS Hand installed successfully!');
+  deferredInstall=null;$('ibanner').classList.add('hidden');
+});
+window.addEventListener('appinstalled',()=>{
+  notify('✅ App installed! Launch it from your home screen.');
+  $('ibanner').classList.add('hidden');
+});
+
+setStatus('Ready — click Start Camera');
+notify('Welcome to COSMOS Hand Controller! Press Alt+F for hands-free mode.');
+</script>
+</body>
+</html>
