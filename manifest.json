@@ -2,7 +2,7 @@
   "name": "COSMOS",
   "short_name": "COSMOS",
   "description": "COSMOS — AI Hand Gesture Controller. Control your device with hand movements.",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#020818",
   "theme_color": "#020818",
@@ -19,7 +19,7 @@
       "name": "Start Gesture Control",
       "short_name": "Start",
       "description": "Launch COSMOS hand gesture control",
-      "url": "/?shortcut=start"
+      "url": "./?shortcut=start"
     }
   ]
 }
