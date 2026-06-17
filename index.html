@@ -181,8 +181,8 @@
   <!-- DEVICE CONTROL BANNER -->
   <div id="dc-banner">
     <div class="dc-dot"></div>
-    <div class="dc-text" id="dc-text">Device Control: Not connected — Run cosmos_controller.py for full PC control</div>
-    <button class="dc-btn" onclick="connectDevice()">Connect</button>
+    <div class="dc-text" id="dc-text">Device Control: Not connected — Run COSMOS_CLICK_ME.bat then open http://localhost:7860</div>
+    <button class="dc-btn" onclick="connectDevice()" id="dc-connect-btn">🔗 Connect</button>
   </div>
 
   <div class="content">
@@ -227,6 +227,19 @@
         <div class="grow"><span class="gem">✌️</span><div class="gi"><div class="gin">Peace Sign</div><div class="gid">Scroll up / down</div></div><div class="gdot" id="gd3"></div></div>
         <div class="grow"><span class="gem">👍</span><div class="gi"><div class="gin">Thumbs Up</div><div class="gid">Confirm / Enter</div></div><div class="gdot" id="gd4"></div></div>
         <div class="grow"><span class="gem">🤏</span><div class="gi"><div class="gin">Pinch</div><div class="gid">Toggle typing mode</div></div><div class="gdot" id="gd5"></div></div>
+      </div>
+      <div class="pcard">
+        <div class="ptitle">Quick Device Controls</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <button onclick="sendCmd('volume_up')" style="padding:7px;border-radius:8px;border:1px solid var(--border);background:rgba(99,179,237,0.05);color:var(--text);font-size:12px;cursor:pointer;">🔊 Vol Up</button>
+          <button onclick="sendCmd('volume_down')" style="padding:7px;border-radius:8px;border:1px solid var(--border);background:rgba(99,179,237,0.05);color:var(--text);font-size:12px;cursor:pointer;">🔉 Vol Down</button>
+          <button onclick="sendCmd('media_play_pause')" style="padding:7px;border-radius:8px;border:1px solid var(--border);background:rgba(99,179,237,0.05);color:var(--text);font-size:12px;cursor:pointer;">⏯ Play/Pause</button>
+          <button onclick="sendCmd('media_next')" style="padding:7px;border-radius:8px;border:1px solid var(--border);background:rgba(99,179,237,0.05);color:var(--text);font-size:12px;cursor:pointer;">⏭ Next</button>
+          <button onclick="sendCmd('switch_window')" style="padding:7px;border-radius:8px;border:1px solid var(--border);background:rgba(99,179,237,0.05);color:var(--text);font-size:12px;cursor:pointer;">🔄 Alt+Tab</button>
+          <button onclick="sendCmd('screenshot')" style="padding:7px;border-radius:8px;border:1px solid var(--border);background:rgba(99,179,237,0.05);color:var(--text);font-size:12px;cursor:pointer;">📸 Screenshot</button>
+          <button onclick="sendCmd('open_browser')" style="padding:7px;border-radius:8px;border:1px solid var(--border);background:rgba(99,179,237,0.05);color:var(--text);font-size:12px;cursor:pointer;">🌐 Browser</button>
+          <button onclick="sendCmd('lock_screen')" style="padding:7px;border-radius:8px;border:1px solid var(--border);background:rgba(252,129,129,0.08);color:var(--red);font-size:12px;cursor:pointer;">🔒 Lock PC</button>
+        </div>
       </div>
       <div class="pcard">
         <div class="ptitle">Activity Log</div>
@@ -393,8 +406,11 @@ function setFB(up){up.forEach((v,i)=>{const b=$('fb'+i);if(!b)return;b.style.hei
 function connectDevice(){
   if(wsOn){ws&&ws.close();return;}
   try{
-    ws=new WebSocket('ws://localhost:8765');
+    // Always use ws:// for localhost (wss:// not needed on local)
+    const wsUrl='ws://localhost:8765';
+    ws=new WebSocket(wsUrl);
     ws.onopen=()=>{
+      document.getElementById('dc-connect-btn').textContent='✅ Connected';
       wsOn=true;
       $('dc-banner').classList.add('connected');
       $('dc-text').textContent='Device Control: Connected — Full PC control active!';
